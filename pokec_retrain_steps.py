@@ -359,10 +359,8 @@ def compute_score(df, target_column, args):
     
     return results
 
-def add_graph_features(df, graph_path):
+def add_graph_features(df, network_lcc):
     
-    with open(graph_path, "rb") as f:
-        network_lcc = pickle.load(f)
     
     degree = dict(network_lcc.degree())
     clustering = nx.clustering(network_lcc)
@@ -373,7 +371,7 @@ def add_graph_features(df, graph_path):
     df["pr"] = df["user_id"].map(pagerank).fillna(0)
     return df
 
-def run_opinion_dynamics(innate_opinions, network_lcc, nodelist, model_name, X_features_labeled, X_features_unlabeled, policy, strong_perform):
+def run_opinion_dynamics(innate_opinions, network_lcc, nodelist, model_name, X_features_labeled, X_features_unlabeled, policy, strong_perform, include_graph_features):
     
     agent_num = len(innate_opinions)
     # this is to reveal the steer effect on the stubborn node.
@@ -423,9 +421,13 @@ def run_opinion_dynamics(innate_opinions, network_lcc, nodelist, model_name, X_f
     else:
         results_folder = POKEC_DATA_DIR / "results"
     results_folder.mkdir(exist_ok=True, parents=True)
-    record_path = results_folder / f"{model_name}_{policy}_whole_record{retrain_T}.pk"
-    gamma0_path = results_folder / f"{model_name}_{policy}_gamma0_whole_record{retrain_T}.pk"
-
+    if not include_graph_features:
+        record_path = results_folder / f"{model_name}_{policy}_whole_record{retrain_T}.pk"
+        gamma0_path = results_folder / f"{model_name}_{policy}_gamma0_whole_record{retrain_T}.pk"
+    else:
+        record_path = results_folder / f"{model_name}_{policy}_whole_record{retrain_T}_graph_feature.pk"
+        gamma0_path = results_folder / f"{model_name}_{policy}_gamma0_whole_record{retrain_T}_graph_feature.pk"
+    
     if record_path.exists():
         with record_path.open("rb") as f:
             whole_opinions = pickle.load(f)
@@ -451,27 +453,11 @@ def run_opinion_dynamics(innate_opinions, network_lcc, nodelist, model_name, X_f
             with gamma0_path.open("wb") as f:
                 pickle.dump(whole_opinions_gamma0, f)
 
-    # FJ(x^*) - needs to be pre-generated - no steering
-    # with (POKEC_DATA_DIR / "results" / f"{model_name}_FJequilibrium.pk").open("rb") as f:
-    #     FJ_equilibrium = pickle.load(f)
-
-    # if policy == "steer":
-        
-    #     x = np.arange(1, retrain_T+1)
-    #     plt.plot(x, whole_opinions[stubborn_node, 1:], label=r"$(x_{PS})_l$")
-    #     print(FJ_equilibrium[stubborn_node])
-    #     plt.hlines(y=FJ_equilibrium[stubborn_node], xmin=1, xmax=retrain_T, linestyle='--', label=r"(FJ($x^*$)$)_l$")
-    #     plt.hlines(y=whole_opinions_gamma0[stubborn_node, -1], xmin=1, xmax=retrain_T, linestyle='--', label=r"$(x_{ex}^{(T)})_l$ ($\gamma_k=0,k\neq j,l$)", color='orange')
-    #     plt.xticks(range(1, retrain_T+1))
-    #     plt.grid(True, linestyle='--', linewidth=0.5, alpha=0.6)
-    #     plt.ylabel("Opinion", fontsize=13)
-    #     plt.legend(loc="upper left", bbox_to_anchor=(1,1), frameon=False, fontsize=10)
-    #     plt.savefig(param_folder / f"{model_name}_parametric_steer_retrain_steps.pdf", bbox_inches='tight')
-
+    
     
 
 
-def plot_adjust(innate_opinions, policy, strong_perform):
+def plot_adjust(innate_opinions, policy, strong_perform, include_graph_features):
     agent_num = len(innate_opinions)
     retrain_T = 100
     if strong_perform:
@@ -480,14 +466,14 @@ def plot_adjust(innate_opinions, policy, strong_perform):
         results_folder = "pokec_dataset/results/"
     param_folder = "pokec_dataset/parametric_params/"
 
-    colors = ["tab:blue", "tab:orange", "tab:green", "tab:red", "tab:purple"]
-    models = ["perfect", "ridge", "neural_net", "mean", "lightgbm"]
+    colors = ["tab:blue", "tab:orange", "tab:red", "tab:purple"]
+    models = ["perfect", "ridge", "mean", "lightgbm"]
 
    
     x = np.arange(0, retrain_T+1)
     if policy == "steer":
     
-        labels = ["Perfect", "OLS", "MLP", "Mean", "LightGBM"]
+        labels = ["Perfect", "OLS", "Mean", "LightGBM"]
 
         with open(param_folder + "stubborn_node_" + str(agent_num) + ".pkl", "rb") as file:
             stubborn_node = pickle.load(file)
@@ -522,9 +508,7 @@ def plot_adjust(innate_opinions, policy, strong_perform):
         plt.savefig(param_folder + "all_parametric_steer_retrain_steps.pdf", bbox_inches='tight')
     else:
         # for supervised learning policy 
-        mean_labels = [r"Mean($x_{ex}^{(t)}$) (Perfect prediction)", r"Mean($x_{ex}^{(t)}$) (OLS)", r"Mean($x_{ex}^{(t)}$) (MLP)", r"Mean($x_{ex}^{(t)}$) (Mean estimation)"]
-        std_labels = [r"Var($x_{ex}^{(t)}$) (Perfect prediction)", r"Var($x_{ex}^{(t)}$) (OLS)", r"Var($x_{ex}^{(t)}$) (MLP)", r"Var($x_{ex}^{(t)}$) (Mean estimation)"]
-        labels = ["Perfect", "OLS", "MLP", "Mean", "LightGBM"]
+        labels = ["Perfect", "OLS", "Mean", "LightGBM"]
         
         fig, ax = plt.subplots()
         step_gap = 15
@@ -539,12 +523,15 @@ def plot_adjust(innate_opinions, policy, strong_perform):
         df = {}
         for i in range(len(models)):
             
-            
-            if os.path.exists(results_folder + models[i] + "_" + policy + "_whole_record" + str(retrain_T) + ".pk"):
-                with open(results_folder + models[i] + "_" + policy + "_whole_record" + str(retrain_T) + ".pk", "rb") as f:
+            if not include_graph_features:
+                record_path = results_folder + models[i] + "_" + policy + "_whole_record" + str(retrain_T) + ".pk"
+            else:
+                record_path = results_folder + models[i] + "_" + policy + "_whole_record" + str(retrain_T) + "_graph_feature.pk"
+            if os.path.exists(record_path):
+                with open(record_path, "rb") as f:
                     whole_opinions = pickle.load(f)
                 
-                df[labels[i]] = whole_opinions[:, :]
+            df[labels[i]] = whole_opinions[:, :]
                 
                 
         
@@ -604,15 +591,20 @@ def plot_adjust(innate_opinions, policy, strong_perform):
                     borderpad=0.2, 
                     handletextpad=0.2,
                     markerscale=3)
-             
-        plt.savefig(param_folder + "all_parametric_sl_retrain_steps.pdf", bbox_inches='tight')
-
+        if not include_graph_features:
+            plt.savefig(param_folder + "all_parametric_sl_retrain_steps.pdf", bbox_inches='tight')
+        else:
+            plt.savefig(param_folder + "all_parametric_sl_retrain_steps_graph_feature.pdf", bbox_inches='tight')
 def main():
     args = parse_args()
     seed_everything(use_cuda=bool(args.device and "cuda" in args.device))
     target_column = "relation_to_smoking"
     include_graph_features = False
+    
     df, network_lcc = load_profiles_and_graph(target_column)
+    if include_graph_features:
+        df = add_graph_features(df, network_lcc)
+        
     param_folder = POKEC_DATA_DIR / "parametric_params"
     param_folder.mkdir(exist_ok=True, parents=True)
     results_folder = POKEC_DATA_DIR / "results"
@@ -633,7 +625,7 @@ def main():
         cache_dir=POKEC_DATA_DIR,
     )
     
-    model_name = "mean"  # "neural_net" or "ridge" or "mean" or "perfect" or "lightgbm"
+    model_name = "mean"  # "ridge" or "mean" or "perfect" or "lightgbm"
     
     # computed sentiment scores are assumed to be innate opinions, x_star
     innate_opinions = np.array(y_label + y_unlabel_label)
@@ -641,11 +633,11 @@ def main():
     policy = "steer"  # "sl" for supervised learning, "steer" for steering
     strong_perform = False  # when it's true, platform_sus = 1 for all individuals
     if adjust_plot:
-        plot_adjust(innate_opinions, policy, strong_perform)
+        plot_adjust(innate_opinions, policy, strong_perform, include_graph_features)
     else: 
-        for model_name in ["perfect", "ridge", "neural_net", "mean", "lightgbm"]:
-            run_opinion_dynamics(innate_opinions, network_lcc, df["user_id"].values, model_name, X_features_labeled, X_features_unlabeled, policy, strong_perform)
-        plot_adjust(innate_opinions, policy, strong_perform)
+        for model_name in ["perfect", "ridge", "mean", "lightgbm"]:
+            run_opinion_dynamics(innate_opinions, network_lcc, df["user_id"].values, model_name, X_features_labeled, X_features_unlabeled, policy, strong_perform, include_graph_features)
+        plot_adjust(innate_opinions, policy, strong_perform, include_graph_features)
 
 if __name__ == "__main__":
     main()

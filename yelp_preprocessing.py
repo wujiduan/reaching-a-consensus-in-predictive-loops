@@ -343,9 +343,10 @@ def load_or_compute_scores(
     return y_label, y_unlabel_label
 
 
-def load_or_compute_features(df_labeled, df_unlabeled, feature_columns, cache_dir, cache_key):
+def load_or_compute_features(df_labeled, df_unlabeled, feature_columns, cache_dir, TARGET_BUSINESS_SLUG, include_graph_features):
     cache_dir = Path(cache_dir)
     cache_dir.mkdir(exist_ok=True, parents=True)
+    cache_key = f"{TARGET_BUSINESS_SLUG}_{include_graph_features}"
     labeled_path = cache_dir / f"labeled_feature_matrix_{cache_key}.pk"
     unlabeled_path = cache_dir / f"unlabeled_feature_matrix_{cache_key}.pk"
 
@@ -356,6 +357,7 @@ def load_or_compute_features(df_labeled, df_unlabeled, feature_columns, cache_di
             X_features_unlabeled = pickle.load(f)
         print("Feature matrix shape:", X_features_labeled.shape)
         return X_features_labeled, X_features_unlabeled
+
 
     X_features_labeled = extract_features(df_labeled, feature_columns)
     X_features_unlabeled = extract_features(df_unlabeled, feature_columns)

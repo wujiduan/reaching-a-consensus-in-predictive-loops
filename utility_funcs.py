@@ -89,44 +89,9 @@ def predicting(model_name, X_features_labeled, y_label, X_features_unlabeled):
     X_train, X_test, y_train, y_test = train_test_split(
         X_features_labeled, np.asarray(y_label), test_size=0.2, random_state=SHARED_RANDOM_SEED
     )
-    if model_name == "neural_net":
-        mean = X_train.mean(axis=0, keepdims=True)
-        std = X_train.std(axis=0, keepdims=True) + 1e-6
-        X_train = (X_train - mean) / std
-        X_test = (X_test - mean) / std
-        X_features_unlabeled = (X_features_unlabeled - mean) / std
+    
 
-        train_ds = TensorDataset(
-            torch.tensor(X_train, dtype=torch.float32),
-            torch.tensor(y_train, dtype=torch.float32),
-        )
-        train_loader = DataLoader(train_ds, batch_size=256, shuffle=True)
-        model = SigmoidMLP(X_train.shape[1])
-        optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
-        loss_fn = nn.MSELoss()
-
-        torch.manual_seed(SHARED_RANDOM_SEED)
-        for _ in range(20):
-            model.train()
-            for xb, yb in train_loader:
-                optimizer.zero_grad()
-                preds = model(xb)
-                loss = loss_fn(preds, yb)
-                loss.backward()
-                optimizer.step()
-
-        model.eval()
-        with torch.no_grad():
-            preds = model(torch.tensor(X_test, dtype=torch.float32)).numpy()
-            unlabeled_preds = model(torch.tensor(X_features_unlabeled, dtype=torch.float32)).numpy()
-
-        rmse = np.sqrt(np.mean((preds - np.array(y_test)) ** 2))
-        r2 = 1 - np.sum((preds - np.array(y_test)) ** 2) / np.sum(
-            (np.array(y_test) - np.array(y_test).mean()) ** 2
-        )
-        print(f"neural net, RMSE: {rmse:.4f} | R2: {r2:.4f}")
-
-    elif model_name == "ridge":
+    if model_name == "ridge":
         model = Ridge(alpha=0.0)
         model.fit(X_train, y_train)
         y_pred = np.clip(model.predict(X_test), 0.0, 1.0)

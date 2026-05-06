@@ -34,6 +34,7 @@ def run_opinion_dynamics(
     X_features_unlabeled,
     policy,
     strong_perform,
+    include_graph_features
 ):
     agent_num = len(innate_opinions)
     fj_K = 100
@@ -86,8 +87,12 @@ def run_opinion_dynamics(
         results_folder = DATA_DIR / "results"
         results_folder.mkdir(exist_ok=True, parents=True)
 
-    record_path = results_folder / f"{model_name}_{policy}_whole_record{retrain_T}.pk"
-    gamma0_path = results_folder / f"{model_name}_{policy}_gamma0_whole_record{retrain_T}.pk"
+    if not include_graph_features:
+        record_path = results_folder / f"{model_name}_{policy}_whole_record{retrain_T}.pk"
+        gamma0_path = results_folder / f"{model_name}_{policy}_gamma0_whole_record{retrain_T}.pk"
+    else:
+        record_path = results_folder / f"{model_name}_{policy}_whole_record{retrain_T}_graph_features.pk"
+        gamma0_path = results_folder / f"{model_name}_{policy}_gamma0_whole_record{retrain_T}_graph_features.pk"
 
     if record_path.exists() and gamma0_path.exists():
         with record_path.open("rb") as f:
@@ -131,22 +136,23 @@ def run_opinion_dynamics(
     
 
 
-def plot_adjust(innate_opinions, policy, strong_perform):
+def plot_adjust(innate_opinions, policy, strong_perform, include_graph_features):
     agent_num = len(innate_opinions)
     retrain_T = 100
     selected_steps = 50
     if strong_perform:
-        results_folder = DATA_DIR / "results_strong_perform"
+        results_folder = DATA_DIR / "results_strong_perform/"
     else:
-        results_folder = DATA_DIR / "results"
+        results_folder = DATA_DIR / "results/"
     param_folder = DATA_DIR / "parametric_params"
 
-    colors = ["tab:blue", "tab:orange", "tab:green", "tab:red", "tab:purple"]
-    models = ["perfect", "ridge", "neural_net", "mean", "lightgbm"]
+    colors = ["tab:blue", "tab:orange",  "tab:red", "tab:purple"]
+    models = ["perfect", "ridge", "mean", "lightgbm"]
 
+    
     x = np.arange(0, selected_steps + 1)
     if policy == "steer":
-        labels = ["Perfect", "OLS", "MLP", "Mean", "LightGBM"]
+        labels = ["Perfect", "OLS", "Mean", "LightGBM"]
 
         with (param_folder / f"stubborn_node_{agent_num}.pkl").open("rb") as file:
             stubborn_node = pickle.load(file)
@@ -176,17 +182,11 @@ def plot_adjust(innate_opinions, policy, strong_perform):
         plt.ylabel(r"Opinion $(x_{ex}^{(t)})_l$", fontsize=18)
         plt.xlabel(r"Retraining step $t$", fontsize=18)
         plt.yticks(fontsize=12)
-        plt.legend(loc="lower right", bbox_to_anchor=(1, 0.06), frameon=False, fontsize=12)
+        plt.legend(loc="lower right", bbox_to_anchor=(1, 0.00), frameon=False, fontsize=12)
         plt.savefig(param_folder / "all_parametric_steer_retrain_steps.pdf", bbox_inches="tight")
         return
 
-    mean_labels = [
-        r"Mean($x_{ex}^{(t)}$) (Perfect prediction)",
-        r"Mean($x_{ex}^{(t)}$) (OLS)",
-        r"Mean($x_{ex}^{(t)}$) (MLP)",
-        r"Mean($x_{ex}^{(t)}$) (Mean estimation)",
-    ]
-    labels = ["Perfect", "OLS", "MLP", "Mean", "LightGBM"]
+    labels = ["Perfect", "OLS", "Mean", "LightGBM"]
 
     fig, ax = plt.subplots()
     step_gap = 40
@@ -201,7 +201,10 @@ def plot_adjust(innate_opinions, policy, strong_perform):
     
     model_rows = {}
     for i, model in enumerate(models):
-        path = results_folder / f"{model}_{policy}_whole_record{retrain_T}.pk"
+        if include_graph_features:
+            path = results_folder / f"{model}_{policy}_whole_record{retrain_T}_graph_features.pk"
+        else:
+            path = results_folder / f"{model}_{policy}_whole_record{retrain_T}.pk"
         if path.exists():
             with path.open("rb") as f:
                 whole_opinions = pickle.load(f)
@@ -264,7 +267,10 @@ def plot_adjust(innate_opinions, policy, strong_perform):
     for handle in leg.legend_handles:
         handle.set_linewidth(1)
 
-    plt.savefig(param_folder / "all_parametric_sl_retrain_steps.pdf", bbox_inches="tight")
+    if include_graph_features:
+        plt.savefig(param_folder / "all_parametric_sl_retrain_steps_graph_features.pdf", bbox_inches="tight")
+    else:
+        plt.savefig(param_folder / "all_parametric_sl_retrain_steps.pdf", bbox_inches="tight")
 
 
 def main():
@@ -294,7 +300,8 @@ def main():
         df_unlabeled,
         feature_columns,
         DATA_DIR,
-        f"{TARGET_BUSINESS_SLUG}_{include_graph_features}",
+        TARGET_BUSINESS_SLUG,
+        include_graph_features
     )
 
     innate_opinions = np.array(y_label + y_unlabel_label, dtype=float)
@@ -302,9 +309,9 @@ def main():
     policy = "steer"
     strong_perform = False
     if adjust_plot:
-        plot_adjust(innate_opinions, policy, strong_perform)
+        plot_adjust(innate_opinions, policy, strong_perform, include_graph_features)
     else:
-        for model_name in ["perfect", "ridge", "neural_net", "mean", "lightgbm"]:
+        for model_name in ["perfect", "ridge", "mean", "lightgbm"]:
             run_opinion_dynamics(
                 innate_opinions,
                 network_lcc,
@@ -314,8 +321,9 @@ def main():
                 X_features_unlabeled,
                 policy,
                 strong_perform,
+                include_graph_features
             )
-        plot_adjust(innate_opinions, policy, strong_perform)
+        plot_adjust(innate_opinions, policy, strong_perform, include_graph_features)
 
 
 if __name__ == "__main__":

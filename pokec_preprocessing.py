@@ -284,8 +284,9 @@ def extract_features(df, args, filtered_textual_features, numerical_features_ext
         sentiment = transformer_pipeline(
             "sentiment-analysis",
             model="cardiffnlp/twitter-xlm-roberta-base-sentiment",
+            tokenizer="xlm-roberta-base",
             device=0 if args.device and "cuda" in args.device else -1,
-            use_fast=False,
+            use_fast=True,
         )
 
         text_feat_matrix = {}
@@ -474,132 +475,6 @@ def load_or_compute_features(
     return X_features_labeled, X_features_unlabeled
 
 
-def run_opinion_dynamics(innate_opinions, network_lcc, nodelist, model_name, X_features_labeled, X_features_unlabeled):
-    
-    agent_num = len(innate_opinions)
-    fj_K = 100
-    retrain_T = 20
-    x_initial = copy.deepcopy(innate_opinions)
-
-    param_folder = "pokec_dataset/parametric_params/"
-    realworld_params = Path(param_folder)
-    realworld_params.mkdir(exist_ok=True)
-
-    # generate heterogeneous parameters
-    platform_file_path = Path(param_folder + "hetero_platform_sus" + str(agent_num) + ".pkl")
-
-    if not platform_file_path.exists():
-        
-        platform_sus = np.clip(np.random.normal(loc=0.9, scale=0.1, size=agent_num), 0.01, 0.99)
-        with open(platform_file_path, "wb") as file:
-            pickle.dump(platform_sus, file)
-    else:
-        with open(platform_file_path, "rb") as file:
-            platform_sus = pickle.load(file)
-
-    peer_file_path = Path(param_folder + "hetero_peer_sus" + str(agent_num) + ".pkl")
-
-    if not peer_file_path.exists():
-        
-        peer_sus = np.clip(np.random.normal(loc=0.9, scale=0.1, size=agent_num), 0.01, 0.99)
-        with open(peer_file_path, "wb") as file:
-            pickle.dump(peer_sus, file)
-    else:
-        with open(peer_file_path, "rb") as file:
-            peer_sus = pickle.load(file)
-
-
-    steer_file_path = Path(param_folder + "hetero_steer_sus" + str(agent_num) + ".pkl")
-
-    if not steer_file_path.exists():
-        steer_strength = np.clip(np.random.normal(loc=0.1, scale=0.1, size=agent_num), 0.01, 0.99)
-        with open(steer_file_path, "wb") as file:
-            pickle.dump(steer_strength, file)
-
-    else:
-        with open(steer_file_path, "rb") as file:
-            steer_strength = pickle.load(file)
-
-    # for illustrating supervised learning policy, strong performativity
-    platform_sus = np.ones(agent_num)
-    steer_strength = np.zeros(agent_num)
-    results_folder = "pokec_dataset/results/"
-    if os.path.exists(results_folder + model_name + "_equilibrium.pk"):
-        with open(results_folder + model_name + "_equilibrium.pk", "rb") as f:
-            perform_equilibrium = pickle.load(f)
-        with open(results_folder + model_name + "_FJequilibrium.pk", "rb") as f:
-            FJ_equilibrium = pickle.load(f)
-    else:
-
-        equilibrium_opinions = run_simulation(network=network_lcc, nodelist=nodelist, platform_params=platform_sus, 
-                                            peer_params=peer_sus, steering_params=steer_strength, 
-                                            steering_vector=None, fj_steps=fj_K, retrain_steps=retrain_T, 
-                                            x_star=innate_opinions, policy='sl', model_name=model_name, 
-                                            X_features_labeled=X_features_labeled, X_features_unlabeled=X_features_unlabeled)
-
-        interval_num = retrain_T
-        heatmap_res1 = np.zeros((agent_num, interval_num+1))
-        heatmap_res1[:, 0] = copy.deepcopy(x_initial)
-        for k in range(interval_num):
-            heatmap_res1[:, k+1] = copy.deepcopy(equilibrium_opinions[:, (k+1)*int(equilibrium_opinions.shape[1]/interval_num)])
-
-
-        x = np.arange(1, agent_num+1)
-        FJ_equilibrium = heatmap_res1[:, 1]
-        perform_equilibrium = heatmap_res1[:, -1]
-        with open(results_folder + model_name + "_equilibrium.pk", "wb") as f:
-            pickle.dump(perform_equilibrium, f)
-        with open(results_folder + model_name + "_FJequilibrium.pk", "wb") as f:
-            pickle.dump(FJ_equilibrium, f)
-        
-    
-    # reference with perfect predictions are pre-generated
-    if model_name == 'perfect':
-        with open("pokec_dataset/results/perfect_equilibrium.pk", "wb") as f:
-            pickle.dump(perform_equilibrium, f)
-        perfect_equilibrium = copy.deepcopy(perform_equilibrium)
-    else:
-        if os.path.exists("pokec_dataset/results/perfect_equilibrium.pk"):
-            with open("pokec_dataset/results/perfect_equilibrium.pk", "rb") as f:
-                perfect_equilibrium = pickle.load(f)
-        else:
-            print("Reference missing! Please generate with policy== perfect first!")
-            perfect_equilibrium = np.full(agent_num, np.nan)
-
-
-
-    innate_mean = innate_opinions.mean(axis=0)
-    innate_std = innate_opinions.std(axis=0)
-
-    fj_mean = FJ_equilibrium.mean(axis=0)
-    fj_std = FJ_equilibrium.std(axis=0)
-
-    performative_mean = perform_equilibrium.mean(axis=0)
-    performative_std = perform_equilibrium.std(axis=0)
-
-    perfect_mean = perfect_equilibrium.mean(axis=0)
-    perfect_std = perfect_equilibrium.std(axis=0)
-
-    
-    colors = ["tab:blue", "tab:orange", "tab:green", "tab:red"]
-    x = np.arange(1, agent_num+1)
-
-    plt.scatter(x, innate_opinions, s=5, color=colors[0], label=r"$x^*$")
-    plt.scatter(x, FJ_equilibrium, s=5, color=colors[1], label=r"FJ($x^*$)")
-    plt.scatter(x, perfect_equilibrium, s=5, color=colors[3], label=r"$x_{PS}$ (perfect)")
-    plt.scatter(x, perform_equilibrium, s=5, color=colors[2], label=r"$x_{PS}$ (imperfect)")
-
-
-    plt.fill_between(x, innate_mean - innate_std, innate_mean + innate_std, color=colors[0], alpha=0.2)
-    plt.fill_between(x, fj_mean - fj_std, fj_mean + fj_std, color=colors[1], alpha=0.2)
-    plt.fill_between(x, performative_mean - performative_std, performative_mean + performative_std, color=colors[2], alpha=0.2)
-    plt.fill_between(x, perfect_mean - perfect_std, perfect_mean + perfect_std, color=colors[3], alpha=0.2)
-    
-    
-    plt.grid(True, linestyle='--', linewidth=0.5, alpha=0.6)
-    plt.ylabel("Opinions", fontsize=13)
-    plt.legend(loc="upper left", bbox_to_anchor=(1,1), frameon=False, fontsize=10)
-    plt.savefig(param_folder + model_name + "_parametric_sl.pdf", bbox_inches='tight')
 
 
 def plot_adjust(model_name):

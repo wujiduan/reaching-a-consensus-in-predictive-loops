@@ -32,12 +32,12 @@ def create_plot():
     enforced_sus = np.arange(0.0, 1.1, 0.1)
 
     
-    # models = ["perfect", "ridge", "neural_net", "mean", "lightgbm"]
-    # labels = ["Perfect", "OLS", "MLP", "Mean", "LightGBM"]
-    models = ["perfect"]
-    labels = ["Perfect"]
+    models = ["perfect", "ridge", "mean", "lightgbm"]
+    labels = ["Perfect", "OLS", "Mean", "LightGBM"]
+    # models = ["perfect"]
+    # labels = ["Perfect"]
 
-    colors = ["tab:blue", "tab:orange", "tab:green", "tab:red", "tab:purple"]
+    colors = ["tab:blue", "tab:orange", "tab:red", "tab:purple"]
 
     fig, ax = plt.subplots()
     for i, model in enumerate(models):
@@ -94,7 +94,8 @@ def main():
         df_unlabeled,
         feature_columns,
         DATA_DIR,
-        f"{TARGET_BUSINESS_SLUG}_{include_graph_features}",
+        TARGET_BUSINESS_SLUG,
+        include_graph_features
     )
 
     innate_opinions = np.array(y_label + y_unlabel_label, dtype=float)
@@ -104,7 +105,7 @@ def main():
     if adjust_plot:
         create_plot()
     else:
-        for model_name in ["perfect", "ridge", "neural_net", "mean", "lightgbm"]:
+        for model_name in ["perfect", "ridge", "mean", "lightgbm"]:
             for test_sus in ["platform", "peer"]:
                 run_sus_var(
                     retrain_T=retrain_T,

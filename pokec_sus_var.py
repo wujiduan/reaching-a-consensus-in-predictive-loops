@@ -32,7 +32,6 @@ from torch.utils.data import DataLoader, TensorDataset
 
 from utility_funcs import (
     SHARED_RANDOM_SEED,
-    SigmoidMLP,
     load_or_create_peer_sus,
     load_or_create_platform_sus,
     predicting,
@@ -384,10 +383,10 @@ def create_plot():
 
     enforced_sus = np.arange(0.0, 1.1, 0.1)
     
-    # models = ["perfect", "ridge", "neural_net", "mean", "lightgbm"]
-    # labels = ["Perfect", "OLS", "MLP", "Mean", "LightGBM"]
-    models = ["perfect"]
-    labels = ["Perfect"]
+    models = ["perfect", "ridge", "mean", "lightgbm"]
+    labels = ["Perfect", "OLS", "Mean", "LightGBM"]
+    # models = ["perfect"]
+    # labels = ["Perfect"]
 
     fig, ax = plt.subplots()
     
@@ -462,7 +461,7 @@ def main():
         create_plot()
     else:
         
-        for model_name in ["perfect", "mean", "ridge", "neural_net", "lightgbm"]:
+        for model_name in ["perfect", "mean", "ridge", "lightgbm"]:
             for test_sus in ["platform", "peer"]:
                 run_sus_var(
                     retrain_T=retrain_T,
